@@ -1,9 +1,10 @@
 [tool.poetry]
 name = "comfy-proxy"
 version = "0.1.0"
-description = ""
+description = "A Python client library for interacting with ComfyUI servers and managing image generation workflows."
 authors = ["Brian Luczkiewicz <brian@blucz.com>"]
-readme = "README.md"
+readme = "README.md" 
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -14,7 +15,6 @@ pillow = "^10.1.0"
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"
 pytest-asyncio = "^0.23.2"
-
 
 [build-system]
 requires = ["poetry-core"]

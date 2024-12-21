@@ -1,4 +1,4 @@
-# ComfyProxy
+# comfy-proxy
 
 A Python client library for interacting with ComfyUI servers and managing image generation workflows.
 
@@ -85,6 +85,37 @@ poetry install
 # Run tests
 poetry run pytest
 ```
+
+## Custom Workflows
+
+ComfyProxy comes with some built-in workflows (like `FluxWorkflow`), but you can easily create your own:
+
+```python
+from comfy_proxy.workflow import ComfyWorkflow, ComfyNode
+
+class MyCustomWorkflow(ComfyWorkflow):
+    def __init__(self, params):
+        super().__init__()
+        self.params = params
+        self._build_workflow()
+        
+    def _build_workflow(self):
+        # Add nodes to create your workflow
+        checkpoint_node = self.add_node(
+            "CheckpointLoaderSimple",
+            {"ckpt_name": "sd_xl_base_1.0.safetensors"}
+        )
+        # ... add more nodes and connect them
+```
+
+We welcome contributions of basic workflows for popular models:
+- Stable Diffusion 1.5
+- SDXL
+- SD Turbo
+- SD 3.0
+- etc.
+
+For more complex use cases, you can implement the `ComfyWorkflow` class directly in your own codebase to create custom workflows with additional functionality.
 
 ## License
 

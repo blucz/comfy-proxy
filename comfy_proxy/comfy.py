@@ -34,7 +34,7 @@ class SingleComfy:
             addr: ComfyUI server address in format 'host:port'
         """
         self.addr = addr
-        self.client_id = str(uuid.uuid4())
+        self.client_id = "gridiron" # str(uuid.uuid4())
 
     async def queue_prompt(self, prompt: Dict[str, Any]) -> Dict[str, Any]:
         """Queue a workflow prompt for execution on ComfyUI server.

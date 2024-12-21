@@ -1,14 +1,14 @@
 import pytest
 import asyncio
 import random
-from comfy_proxy.comfy import SingleComfy
+from comfy_proxy.comfy import Comfy
 from comfy_proxy.workflows.flux import FluxModel, FluxWorkflowParams, FluxWorkflow
 from comfy_proxy.workflow import Sizes
 
 @pytest.mark.asyncio
 async def test_generate_to_file() -> None:
     # Initialize the Comfy client
-    comfy = SingleComfy("127.0.0.1:7821")
+    comfy = Comfy("127.0.0.1:7821")
     
     # Create a model configuration
     model = FluxModel()

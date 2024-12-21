@@ -79,7 +79,6 @@ class FluxWorkflow(ComfyWorkflow):
         
         # If we have LoRAs, the final CLIP output will be on index 1
         if self.params.model.loras:
-            clip_output_index = 1
             for lora_spec in self.params.model.loras:
                 lora = self.add_node("LoraLoader", {
                     "lora_name": lora_spec.name,
@@ -88,6 +87,7 @@ class FluxWorkflow(ComfyWorkflow):
                     "model": [current_model, 0],
                     "clip": [current_clip, 0]
                 })
+                clip_output_index = 1
                 current_model = lora
                 current_clip = lora
 
