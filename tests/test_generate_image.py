@@ -8,7 +8,7 @@ from comfy_proxy.workflow import Sizes
 @pytest.mark.asyncio
 async def test_generate_to_file() -> None:
     # Initialize the Comfy client
-    comfy = Comfy("127.0.0.1:7821")
+    comfy = Comfy("127.0.0.1:8188")
     
     # Create a model configuration
     model = FluxModel()

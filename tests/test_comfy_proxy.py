@@ -9,7 +9,7 @@ from comfy_proxy.workflow import Sizes
 async def test_workflow() -> None:
     async with aiohttp.ClientSession() as session:
         # Initialize the Comfy client
-        comfy = SingleComfy("127.0.0.1:7821")
+        comfy = SingleComfy("127.0.0.1:8188")
         
         # Create a model configuration
         model = FluxModel()

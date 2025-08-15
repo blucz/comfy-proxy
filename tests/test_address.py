@@ -2,10 +2,10 @@ import pytest
 from comfy_proxy.address import parse_addresses
 
 def test_single_address() -> None:
-    assert parse_addresses("127.0.0.1:7821") == ["127.0.0.1:7821"]
+    assert parse_addresses("127.0.0.1:8188") == ["127.0.0.1:8188"]
     
 def test_list_of_addresses() -> None:
-    input_list = ["127.0.0.1:7821", "127.0.0.1:7822"]
+    input_list = ["127.0.0.1:8188", "127.0.0.1:8189"]
     assert parse_addresses(input_list) == input_list
     
 def test_comma_separated() -> None:

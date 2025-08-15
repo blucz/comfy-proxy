@@ -34,7 +34,8 @@ class SingleComfy:
             addr: ComfyUI server address in format 'host:port'
         """
         self.addr = addr
-        self.client_id = "gridiron" # str(uuid.uuid4())
+        self.client_id = str(uuid.uuid4())
+        self.websocket = None
 
     async def queue_prompt(self, prompt: Dict[str, Any]) -> Dict[str, Any]:
         """Queue a workflow prompt for execution on ComfyUI server.
@@ -76,39 +77,50 @@ class SingleComfy:
             logger.error(f"Invalid JSON response from ComfyUI: {str(e)}", exc_info=True)
             raise RuntimeError(f"Invalid response from ComfyUI: {str(e)}") from e
         
-    async def get_images(self, websocket: websockets.WebSocketClientProtocol, prompt_id: str) -> Dict[str, List[bytes]]:
+    async def connect(self) -> None:
+        """Establish websocket connection to ComfyUI server"""
+        if not self.websocket or self.websocket.closed:
+            self.websocket = await websockets.connect(
+                f"ws://{self.addr}/ws?clientId={self.client_id}",
+                max_size=None,  # No limit on message size
+                max_queue=None  # No limit on queue size
+            )
+
+    async def disconnect(self) -> None:
+        """Close websocket connection if open"""
+        if self.websocket and not self.websocket.closed:
+            await self.websocket.close()
+            self.websocket = None
+
+    async def get_images(self, prompt_id: str) -> Dict[str, List[bytes]]:
         """Receive generated images over websocket connection.
         
         Args:
-            websocket: Connected websocket client
             prompt_id: ID of prompt to receive images for
             
         Returns:
             Dict mapping node IDs to lists of image data bytes
         """
-        try:
-            output_images = {}
-            current_node = ""
-            
-            async for message in websocket:
-                if isinstance(message, str):
-                    data = json.loads(message)
-                    if data['type'] == 'executing':
-                        exec_data = data['data']
-                        if exec_data.get('prompt_id') == prompt_id:
-                            if exec_data['node'] is None:
-                                break  # Execution is done
-                            else:
-                                current_node = exec_data['node']
-                else:
-                    if current_node == 'save_image_websocket_node':
-                        images_output = output_images.get(current_node, [])
-                        images_output.append(message[8:])
-                        output_images[current_node] = images_output
+        output_images = {}
+        current_node = ""
+        
+        async for message in self.websocket:
+            if isinstance(message, str):
+                data = json.loads(message)
+                if data['type'] == 'executing':
+                    exec_data = data['data']
+                    if exec_data.get('prompt_id') == prompt_id:
+                        if exec_data['node'] is None:
+                            break  # Execution is done
+                        else:
+                            current_node = exec_data['node']
+            else:
+                if current_node == 'save_image_websocket_node':
+                    images_output = output_images.get(current_node, [])
+                    images_output.append(message[8:])
+                    output_images[current_node] = images_output
 
-            return output_images
-        finally:
-            await websocket.close()
+        return output_images
 
     async def generate(self, workflow: ComfyWorkflow) -> AsyncGenerator[bytes, None]:
         """Generate images from a workflow.
@@ -131,21 +143,15 @@ class SingleComfy:
         response = await self.queue_prompt(prompt_data)
         prompt_id = response['prompt_id']
         
-        websocket = None
         try:
-            # Connect to websocket and get images
-            websocket = await websockets.connect(
-                f"ws://{self.addr}/ws?clientId={self.client_id}",
-                max_size=None,  # No limit on message size
-                max_queue=None  # No limit on queue size
-            )
-            images = await self.get_images(websocket, prompt_id)
+            await self.connect()
+            images = await self.get_images(prompt_id)
             for node_id in images:
                 for image_data in images[node_id]:
                     yield image_data
-        finally:
-            if websocket and not websocket.closed:
-                await websocket.close()
+        except Exception as e:
+            await self.disconnect()  # Force reconnect on error
+            raise e
 
 
 class Comfy:
@@ -200,10 +206,14 @@ class Comfy:
             self.workers.append(worker)
 
     async def stop(self) -> None:
-        """Stop all worker tasks"""
+        """Stop all worker tasks and cleanup connections"""
         for worker in self.workers:
             worker.cancel()
         self.workers.clear()
+        
+        # Close all websocket connections
+        for instance in self.instances:
+            await instance.disconnect()
 
     async def generate(self, workflow: ComfyWorkflow) -> AsyncGenerator[bytes, None]:
         """Generate images using available Comfy instances in parallel

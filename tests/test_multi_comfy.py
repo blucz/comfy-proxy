@@ -30,7 +30,7 @@ async def test_parallel_generation() -> None:
         workflows.append(FluxWorkflow(params))
     
     # Initialize MultiComfy with port range format
-    comfy = Comfy("127.0.0.1:7821-7824")
+    comfy = Comfy("127.0.0.1:8188-8189")
     
     # Create tasks for parallel generation
     async def generate_and_save(workflow: FluxWorkflow, index: int) -> bool:
