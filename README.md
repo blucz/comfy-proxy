@@ -86,6 +86,15 @@ poetry install
 poetry run pytest
 ```
 
+## Built-In Workflows
+
+- Flux t2i
+- Wan 2.2 i2v (first frame, first+last frame, lightning)
+- Qwen Image (regular, lightning)
+- Qwen Image Edit 2509 (regular, lightning)
+
+These correspond roughly to the default ComfyUI workflows and should be highly compatible.
+
 ## Custom Workflows
 
 ComfyProxy comes with some built-in workflows (like `FluxWorkflow`), but you can easily create your own:
