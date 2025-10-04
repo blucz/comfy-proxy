@@ -77,6 +77,50 @@ class SingleComfy:
             logger.error(f"Invalid JSON response from ComfyUI: {str(e)}", exc_info=True)
             raise RuntimeError(f"Invalid response from ComfyUI: {str(e)}") from e
         
+    async def upload_image(self, image_path: str, image_type: str = "input", overwrite: bool = True) -> str:
+        """Upload an image to ComfyUI server.
+
+        Args:
+            image_path: Path to the image file to upload
+            image_type: Type of image - "input", "output", or "temp" (default: "input")
+            overwrite: Whether to overwrite existing file (default: True)
+
+        Returns:
+            Uploaded filename as stored on server
+
+        Raises:
+            RuntimeError: If upload fails
+            FileNotFoundError: If image_path doesn't exist
+        """
+        import os
+        from pathlib import Path
+
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Image file not found: {image_path}")
+
+        filename = Path(image_path).name
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                with open(image_path, 'rb') as f:
+                    form_data = aiohttp.FormData()
+                    form_data.add_field('image', f, filename=filename, content_type='image/png')
+                    form_data.add_field('type', image_type)
+                    form_data.add_field('overwrite', str(overwrite).lower())
+
+                    async with session.post(f"http://{self.addr}/upload/image", data=form_data) as resp:
+                        if resp.status != 200:
+                            error_text = await resp.text()
+                            raise RuntimeError(f"ComfyUI image upload failed with status {resp.status}: {error_text}")
+
+                        response = await resp.json()
+                        logger.debug(f"Image uploaded successfully: {response}")
+                        return response.get('name', filename)
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error uploading image to ComfyUI at {self.addr}: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to upload image to ComfyUI: {str(e)}") from e
+
     async def connect(self) -> None:
         """Establish websocket connection to ComfyUI server"""
         if not self.websocket or self.websocket.closed:
@@ -122,27 +166,36 @@ class SingleComfy:
 
         return output_images
 
-    async def generate(self, workflow: ComfyWorkflow) -> AsyncGenerator[bytes, None]:
+    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
         """Generate images from a workflow.
-        
+
         Args:
             workflow: ComfyWorkflow instance defining the generation pipeline
-            
+            image_uploads: Optional dict mapping node input field names to local image paths to upload
+                          e.g. {"image": "/path/to/input.jpg"} will upload the image and update
+                          the workflow's LoadImage node to reference it
+
         Yields:
             Generated image data as PNG bytes
-            
+
         Raises:
             RuntimeError: On ComfyUI errors
             websockets.WebSocketException: On websocket errors
         """
-        """Generate images from a prompt and return PNG bytes"""
+        # Handle image uploads if provided
+        if image_uploads:
+            for field_name, image_path in image_uploads.items():
+                uploaded_name = await self.upload_image(image_path)
+                # Update workflow to use uploaded image
+                workflow._update_image_reference(field_name, uploaded_name)
+
         # generate the comfy json
         prompt_data = workflow.to_dict()
-        
+
         # Queue the prompt first
         response = await self.queue_prompt(prompt_data)
         prompt_id = response['prompt_id']
-        
+
         try:
             await self.connect()
             images = await self.get_images(prompt_id)
@@ -215,17 +268,25 @@ class Comfy:
         for instance in self.instances:
             await instance.disconnect()
 
-    async def generate(self, workflow: ComfyWorkflow) -> AsyncGenerator[bytes, None]:
+    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
         """Generate images using available Comfy instances in parallel
-        
+
         Args:
-            workflow: The workflow to exeGcute
-            
+            workflow: The workflow to execute
+            image_uploads: Optional dict mapping node input field names to local image paths to upload
+
         Yields:
             Generated image data as byte arrays containing .png format
         """
         if not self.workers:
             await self.start()
+
+        # If there are image uploads, handle them before queueing
+        if image_uploads:
+            # Use the first instance to upload images
+            for field_name, image_path in image_uploads.items():
+                uploaded_name = await self.instances[0].upload_image(image_path)
+                workflow._update_image_reference(field_name, uploaded_name)
 
         future = asyncio.Future()
         await self.queue.put((workflow, future))

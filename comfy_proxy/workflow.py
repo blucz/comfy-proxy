@@ -77,9 +77,20 @@ class ComfyWorkflow:
         self.nodes[node_id] = ComfyNode(class_type, inputs, meta)
         return node_id
 
+    def _update_image_reference(self, field_name: str, uploaded_filename: str) -> None:
+        """Update LoadImage nodes to reference an uploaded image.
+
+        Args:
+            field_name: The input field name to update (e.g. "image")
+            uploaded_filename: The filename returned from upload
+        """
+        for node_id, node in self.nodes.items():
+            if node.class_type == "LoadImage" and field_name in node.inputs:
+                node.inputs[field_name] = uploaded_filename
+
     def to_dict(self) -> Dict:
         """Convert workflow to ComfyUI-compatible dictionary format.
-        
+
         Returns:
             Dictionary representation of the complete workflow graph
         """
