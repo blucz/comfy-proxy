@@ -77,6 +77,64 @@ class SingleComfy:
             logger.error(f"Invalid JSON response from ComfyUI: {str(e)}", exc_info=True)
             raise RuntimeError(f"Invalid response from ComfyUI: {str(e)}") from e
         
+    async def get_history(self, prompt_id: str) -> Dict[str, Any]:
+        """Get execution history for a prompt.
+
+        Args:
+            prompt_id: The prompt ID to get history for
+
+        Returns:
+            History dictionary containing outputs
+
+        Raises:
+            RuntimeError: If fetch fails
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://{self.addr}/history/{prompt_id}") as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise RuntimeError(f"ComfyUI history fetch failed with status {resp.status}: {error_text}")
+
+                    history = await resp.json()
+                    return history
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error fetching history from ComfyUI at {self.addr}: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to fetch history from ComfyUI: {str(e)}") from e
+
+    async def get_video(self, filename: str, subfolder: str = "") -> bytes:
+        """Fetch a saved video file from ComfyUI server.
+
+        Args:
+            filename: The video filename to fetch
+            subfolder: Optional subfolder path (e.g. "wan_i2v")
+
+        Returns:
+            Video file data as bytes
+
+        Raises:
+            RuntimeError: If fetch fails
+        """
+        try:
+            params = {"filename": filename, "type": "output"}
+            if subfolder:
+                params["subfolder"] = subfolder
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"http://{self.addr}/view", params=params) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        raise RuntimeError(f"ComfyUI video fetch failed with status {resp.status}: {error_text}")
+
+                    video_data = await resp.read()
+                    logger.debug(f"Video fetched successfully: {filename}")
+                    return video_data
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error fetching video from ComfyUI at {self.addr}: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to fetch video from ComfyUI: {str(e)}") from e
+
     async def upload_image(self, image_path: str, image_type: str = "input", overwrite: bool = True) -> str:
         """Upload an image to ComfyUI server.
 
@@ -137,17 +195,17 @@ class SingleComfy:
             self.websocket = None
 
     async def get_images(self, prompt_id: str) -> Dict[str, List[bytes]]:
-        """Receive generated images over websocket connection.
-        
+        """Receive generated images or videos over websocket connection.
+
         Args:
-            prompt_id: ID of prompt to receive images for
-            
+            prompt_id: ID of prompt to receive images/videos for
+
         Returns:
-            Dict mapping node IDs to lists of image data bytes
+            Dict mapping node IDs to lists of image/video data bytes
         """
         output_images = {}
         current_node = ""
-        
+
         async for message in self.websocket:
             if isinstance(message, str):
                 data = json.loads(message)
@@ -159,7 +217,8 @@ class SingleComfy:
                         else:
                             current_node = exec_data['node']
             else:
-                if current_node == 'save_image_websocket_node':
+                # Handle both image and video websocket nodes
+                if current_node in ['save_image_websocket_node', 'save_video_websocket_node']:
                     images_output = output_images.get(current_node, [])
                     images_output.append(message[8:])
                     output_images[current_node] = images_output
@@ -167,7 +226,7 @@ class SingleComfy:
         return output_images
 
     async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
-        """Generate images from a workflow.
+        """Generate images or videos from a workflow.
 
         Args:
             workflow: ComfyWorkflow instance defining the generation pipeline
@@ -176,7 +235,7 @@ class SingleComfy:
                           the workflow's LoadImage node to reference it
 
         Yields:
-            Generated image data as PNG bytes
+            Generated image/video data as bytes (PNG for images, MP4 for videos)
 
         Raises:
             RuntimeError: On ComfyUI errors
@@ -192,6 +251,9 @@ class SingleComfy:
         # generate the comfy json
         prompt_data = workflow.to_dict()
 
+        # Check if this is a video workflow (has SaveVideo node)
+        has_save_video = any(node.get('class_type') == 'SaveVideo' for node in prompt_data.values())
+
         # Queue the prompt first
         response = await self.queue_prompt(prompt_data)
         prompt_id = response['prompt_id']
@@ -199,9 +261,45 @@ class SingleComfy:
         try:
             await self.connect()
             images = await self.get_images(prompt_id)
-            for node_id in images:
-                for image_data in images[node_id]:
-                    yield image_data
+
+            # If this is a video workflow, fetch the video file from history
+            if has_save_video:
+                logger.info(f"Video workflow detected, fetching history for prompt {prompt_id}")
+                history = await self.get_history(prompt_id)
+                logger.debug(f"History response: {history}")
+
+                if prompt_id in history:
+                    outputs = history[prompt_id].get('outputs', {})
+                    logger.debug(f"Outputs: {outputs}")
+
+                    found_video = False
+                    for node_id, output in outputs.items():
+                        # Check for 'videos' key or 'images' with 'animated' flag
+                        videos_list = output.get('videos', [])
+                        if not videos_list and 'images' in output and output.get('animated'):
+                            # SaveVideo node returns videos in 'images' key with 'animated' flag
+                            videos_list = output['images']
+
+                        if videos_list:
+                            found_video = True
+                            for video_info in videos_list:
+                                filename = video_info['filename']
+                                subfolder = video_info.get('subfolder', '')
+                                logger.info(f"Fetching video: {filename} from subfolder: {subfolder}")
+                                video_data = await self.get_video(filename, subfolder)
+                                yield video_data
+
+                    if not found_video:
+                        logger.error(f"No videos found in outputs: {outputs}")
+                        raise RuntimeError(f"No videos found in ComfyUI outputs for prompt {prompt_id}")
+                else:
+                    logger.error(f"Prompt {prompt_id} not found in history: {history}")
+                    raise RuntimeError(f"Prompt {prompt_id} not found in history")
+            else:
+                # Regular image workflow
+                for node_id in images:
+                    for image_data in images[node_id]:
+                        yield image_data
         except Exception as e:
             await self.disconnect()  # Force reconnect on error
             raise e
@@ -260,10 +358,16 @@ class Comfy:
 
     async def stop(self) -> None:
         """Stop all worker tasks and cleanup connections"""
+        # Cancel all workers
         for worker in self.workers:
             worker.cancel()
+
+        # Wait for workers to finish cancelling
+        if self.workers:
+            await asyncio.gather(*self.workers, return_exceptions=True)
+
         self.workers.clear()
-        
+
         # Close all websocket connections
         for instance in self.instances:
             await instance.disconnect()

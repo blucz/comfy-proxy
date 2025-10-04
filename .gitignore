@@ -165,4 +165,7 @@ cython_debug/
 .DS_Store
 ._.DS_Store
 
-.python_version
+.python-version
+
+wan_i2v_lightning_first_last_output.mp4
+wan_i2v_lightning_output.mp4
