@@ -13,7 +13,7 @@ class QwenImageEditPlusModel:
     loras: List[Lora] = None
     weight_dtype: str = "fp8_e4m3fn"
     clip_type: str = "qwen_image"
-    clip_device: str = "cpu"
+    clip_device: str = "default"
 
     def __post_init__(self):
         if self.loras is None:
@@ -34,7 +34,7 @@ class QwenImageEditPlusLightningModel:
     loras: List[Lora] = None
     weight_dtype: str = "fp8_e4m3fn"
     clip_type: str = "qwen_image"
-    clip_device: str = "cpu"
+    clip_device: str = "default"
 
     def __post_init__(self):
         if self.loras is None:
