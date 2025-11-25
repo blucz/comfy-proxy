@@ -54,8 +54,10 @@ class QwenImageEditPlusLightningModel:
 class QwenImageEditPlusWorkflowParams:
     """Parameters for configuring a Qwen Image Edit workflow"""
     prompt: str
-    image: str  # Path to input image or image data
+    image: str  # Path to input image or image data (primary image)
     model: QwenImageEditPlusModel
+    image2: Optional[str] = None  # Optional second reference image
+    image3: Optional[str] = None  # Optional third reference image
     negative_prompt: str = "cartoon, anime, ugly"
     size: Size = Sizes.SQUARE_1K  # Target megapixels, will be scaled
     megapixels: float = 1.0  # Target megapixels for scaling
@@ -78,8 +80,10 @@ class QwenImageEditPlusWorkflowParams:
 class QwenImageEditPlusLightningWorkflowParams:
     """Parameters for configuring a Qwen Image Edit Plus Lightning workflow (8 steps, cfg=1.0)"""
     prompt: str
-    image: str  # Path to input image or image data
+    image: str  # Path to input image or image data (primary image)
     model: QwenImageEditPlusLightningModel
+    image2: Optional[str] = None  # Optional second reference image
+    image3: Optional[str] = None  # Optional third reference image
     negative_prompt: str = "cartoon, anime, ugly"
     size: Size = Sizes.SQUARE_1K  # Target megapixels, will be scaled
     megapixels: float = 1.0  # Target megapixels for scaling
@@ -140,16 +144,40 @@ class QwenImageEditPlusWorkflow(ComfyWorkflow):
             }, title="LoraLoaderModelOnly")
             current_model = lora
 
-        # Load and scale input image
+        # Load and scale input images (up to 3)
         load_image = self.add_node("LoadImage", {
             "image": self.params.image
-        }, title="Load Image")
+        }, title="Load Image 1")
 
         scale_image = self.add_node("ImageScaleToTotalPixels", {
             "upscale_method": self.params.upscale_method,
             "megapixels": self.params.megapixels,
             "image": [load_image, 0]
-        }, title="Scale Image to Total Pixels")
+        }, title="Scale Image 1")
+
+        # Optional: Load and scale image2
+        scale_image2 = None
+        if self.params.image2:
+            load_image2 = self.add_node("LoadImage", {
+                "image": self.params.image2
+            }, title="Load Image 2")
+            scale_image2 = self.add_node("ImageScaleToTotalPixels", {
+                "upscale_method": self.params.upscale_method,
+                "megapixels": self.params.megapixels,
+                "image": [load_image2, 0]
+            }, title="Scale Image 2")
+
+        # Optional: Load and scale image3
+        scale_image3 = None
+        if self.params.image3:
+            load_image3 = self.add_node("LoadImage", {
+                "image": self.params.image3
+            }, title="Load Image 3")
+            scale_image3 = self.add_node("ImageScaleToTotalPixels", {
+                "upscale_method": self.params.upscale_method,
+                "megapixels": self.params.megapixels,
+                "image": [load_image3, 0]
+            }, title="Scale Image 3")
 
         # Encode the input image to latent space
         vae_encode = self.add_node("VAEEncode", {
@@ -169,20 +197,32 @@ class QwenImageEditPlusWorkflow(ComfyWorkflow):
             "model": [model_sampling, 0]
         }, title="CFGNorm")
 
-        # Encode prompts using TextEncodeQwenImageEditPlus
-        positive_prompt = self.add_node("TextEncodeQwenImageEditPlus", {
+        # Build TextEncodeQwenImageEditPlus inputs (handles 1-3 images)
+        positive_inputs = {
             "prompt": self.params.prompt,
             "clip": [clip, 0],
             "vae": [vae, 0],
             "image1": [scale_image, 0]
-        }, title="TextEncodeQwenImageEditPlus")
-
-        negative_prompt = self.add_node("TextEncodeQwenImageEditPlus", {
+        }
+        negative_inputs = {
             "prompt": self.params.negative_prompt,
             "clip": [clip, 0],
             "vae": [vae, 0],
             "image1": [scale_image, 0]
-        }, title="TextEncodeQwenImageEditPlus")
+        }
+        if scale_image2:
+            positive_inputs["image2"] = [scale_image2, 0]
+            negative_inputs["image2"] = [scale_image2, 0]
+        if scale_image3:
+            positive_inputs["image3"] = [scale_image3, 0]
+            negative_inputs["image3"] = [scale_image3, 0]
+
+        # Encode prompts using TextEncodeQwenImageEditPlus
+        positive_prompt = self.add_node("TextEncodeQwenImageEditPlus",
+            positive_inputs, title="TextEncodeQwenImageEditPlus")
+
+        negative_prompt = self.add_node("TextEncodeQwenImageEditPlus",
+            negative_inputs, title="TextEncodeQwenImageEditPlus")
 
         # Sample
         sampler = self.add_node("KSampler", {
@@ -252,16 +292,40 @@ class QwenImageEditPlusLightningWorkflow(ComfyWorkflow):
             }, title="LoraLoaderModelOnly")
             current_model = lora
 
-        # Load and scale input image
+        # Load and scale input images (up to 3)
         load_image = self.add_node("LoadImage", {
             "image": self.params.image
-        }, title="Load Image")
+        }, title="Load Image 1")
 
         scale_image = self.add_node("ImageScaleToTotalPixels", {
             "upscale_method": self.params.upscale_method,
             "megapixels": self.params.megapixels,
             "image": [load_image, 0]
-        }, title="Scale Image to Total Pixels")
+        }, title="Scale Image 1")
+
+        # Optional: Load and scale image2
+        scale_image2 = None
+        if self.params.image2:
+            load_image2 = self.add_node("LoadImage", {
+                "image": self.params.image2
+            }, title="Load Image 2")
+            scale_image2 = self.add_node("ImageScaleToTotalPixels", {
+                "upscale_method": self.params.upscale_method,
+                "megapixels": self.params.megapixels,
+                "image": [load_image2, 0]
+            }, title="Scale Image 2")
+
+        # Optional: Load and scale image3
+        scale_image3 = None
+        if self.params.image3:
+            load_image3 = self.add_node("LoadImage", {
+                "image": self.params.image3
+            }, title="Load Image 3")
+            scale_image3 = self.add_node("ImageScaleToTotalPixels", {
+                "upscale_method": self.params.upscale_method,
+                "megapixels": self.params.megapixels,
+                "image": [load_image3, 0]
+            }, title="Scale Image 3")
 
         # Encode the input image to latent space
         vae_encode = self.add_node("VAEEncode", {
@@ -281,20 +345,32 @@ class QwenImageEditPlusLightningWorkflow(ComfyWorkflow):
             "model": [model_sampling, 0]
         }, title="CFGNorm")
 
-        # Encode prompts using TextEncodeQwenImageEditPlus
-        positive_prompt = self.add_node("TextEncodeQwenImageEditPlus", {
+        # Build TextEncodeQwenImageEditPlus inputs (handles 1-3 images)
+        positive_inputs = {
             "prompt": self.params.prompt,
             "clip": [clip, 0],
             "vae": [vae, 0],
             "image1": [scale_image, 0]
-        }, title="TextEncodeQwenImageEditPlus")
-
-        negative_prompt = self.add_node("TextEncodeQwenImageEditPlus", {
+        }
+        negative_inputs = {
             "prompt": self.params.negative_prompt,
             "clip": [clip, 0],
             "vae": [vae, 0],
             "image1": [scale_image, 0]
-        }, title="TextEncodeQwenImageEditPlus")
+        }
+        if scale_image2:
+            positive_inputs["image2"] = [scale_image2, 0]
+            negative_inputs["image2"] = [scale_image2, 0]
+        if scale_image3:
+            positive_inputs["image3"] = [scale_image3, 0]
+            negative_inputs["image3"] = [scale_image3, 0]
+
+        # Encode prompts using TextEncodeQwenImageEditPlus
+        positive_prompt = self.add_node("TextEncodeQwenImageEditPlus",
+            positive_inputs, title="TextEncodeQwenImageEditPlus")
+
+        negative_prompt = self.add_node("TextEncodeQwenImageEditPlus",
+            negative_inputs, title="TextEncodeQwenImageEditPlus")
 
         # Sample
         sampler = self.add_node("KSampler", {
