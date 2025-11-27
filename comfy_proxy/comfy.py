@@ -194,6 +194,30 @@ class SingleComfy:
             await self.websocket.close()
             self.websocket = None
 
+    async def interrupt(self) -> bool:
+        """Interrupt the currently executing prompt on this ComfyUI instance.
+
+        This also disconnects the websocket to unblock any pending get_images() calls.
+
+        Returns:
+            True if interrupt was successful, False otherwise
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(f"http://{self.addr}/interrupt") as resp:
+                    if resp.status == 200:
+                        logger.info(f"Interrupted execution on {self.addr}")
+                        # Disconnect websocket to unblock any waiting calls
+                        await self.disconnect()
+                        return True
+                    else:
+                        error_text = await resp.text()
+                        logger.warning(f"Interrupt failed on {self.addr} with status {resp.status}: {error_text}")
+                        return False
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error interrupting ComfyUI at {self.addr}: {str(e)}")
+            return False
+
     async def get_images(self, prompt_id: str) -> Dict[str, List[bytes]]:
         """Receive generated images or videos over websocket connection.
 
@@ -371,6 +395,18 @@ class Comfy:
         # Close all websocket connections
         for instance in self.instances:
             await instance.disconnect()
+
+    async def interrupt_all(self) -> int:
+        """Interrupt all currently executing prompts across all ComfyUI instances.
+
+        Returns:
+            Number of instances where interrupt succeeded
+        """
+        results = await asyncio.gather(
+            *[instance.interrupt() for instance in self.instances],
+            return_exceptions=True
+        )
+        return sum(1 for r in results if r is True)
 
     async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
         """Generate images using available Comfy instances in parallel
