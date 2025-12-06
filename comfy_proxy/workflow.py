@@ -100,6 +100,24 @@ class ComfyWorkflow:
                 if node.class_type == "LoadImage" and field_name in node.inputs:
                     node.inputs[field_name] = uploaded_filename
 
+    def _update_video_reference(self, field_name: str, uploaded_filename: str, node_id: Optional[str] = None) -> None:
+        """Update LoadVideo nodes to reference an uploaded video.
+
+        Args:
+            field_name: The input field name to update (e.g. "file")
+            uploaded_filename: The filename returned from upload
+            node_id: Optional specific node ID to update (if None, updates all matching nodes)
+        """
+        if node_id:
+            # Update specific node
+            if node_id in self.nodes and self.nodes[node_id].class_type == "LoadVideo":
+                self.nodes[node_id].inputs[field_name] = uploaded_filename
+        else:
+            # Update all LoadVideo nodes with matching field
+            for nid, node in self.nodes.items():
+                if node.class_type == "LoadVideo" and field_name in node.inputs:
+                    node.inputs[field_name] = uploaded_filename
+
     def to_dict(self) -> Dict:
         """Convert workflow to ComfyUI-compatible dictionary format.
 

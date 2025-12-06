@@ -34,7 +34,7 @@ async def test_parallel_generation() -> None:
     
     # Create tasks for parallel generation
     async def generate_and_save(workflow: FluxWorkflow, index: int) -> bool:
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             with open(f"test_image_{index}.png", "wb") as f:
                 f.write(image_data)
             return True  # Successfully generated

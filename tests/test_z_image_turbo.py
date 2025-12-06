@@ -20,7 +20,7 @@ async def test_z_image_turbo_generate() -> None:
 
         workflow = ZImageTurboWorkflow(params)
 
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             # Save the generated image
             with open("z_image_turbo_test.png", "wb") as f:
                 f.write(image_data)

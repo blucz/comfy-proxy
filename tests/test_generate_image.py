@@ -27,7 +27,7 @@ async def test_generate_to_file() -> None:
         workflow = FluxWorkflow(params)
 
         # Generate and save the first image
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             with open("image.png", "wb") as f:
                 f.write(image_data)
             break  # Only save the first image

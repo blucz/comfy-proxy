@@ -179,6 +179,64 @@ class SingleComfy:
             logger.error(f"Network error uploading image to ComfyUI at {self.addr}: {str(e)}", exc_info=True)
             raise RuntimeError(f"Failed to upload image to ComfyUI: {str(e)}") from e
 
+    async def upload_video(self, video_path: str, overwrite: bool = True) -> str:
+        """Upload a video to ComfyUI server.
+
+        ComfyUI uses the same /upload/image endpoint for all files (images and videos).
+        Videos are stored in the input directory and can be referenced by LoadVideo nodes.
+
+        Args:
+            video_path: Path to the video file to upload
+            overwrite: Whether to overwrite existing file (default: True)
+
+        Returns:
+            Uploaded filename as stored on server
+
+        Raises:
+            RuntimeError: If upload fails
+            FileNotFoundError: If video_path doesn't exist
+        """
+        import os
+        from pathlib import Path
+
+        if not os.path.exists(video_path):
+            raise FileNotFoundError(f"Video file not found: {video_path}")
+
+        filename = Path(video_path).name
+        # Determine content type based on extension
+        ext = Path(video_path).suffix.lower()
+        content_type_map = {
+            '.mp4': 'video/mp4',
+            '.webm': 'video/webm',
+            '.mov': 'video/quicktime',
+            '.avi': 'video/x-msvideo',
+            '.mkv': 'video/x-matroska',
+        }
+        content_type = content_type_map.get(ext, 'video/mp4')
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                with open(video_path, 'rb') as f:
+                    form_data = aiohttp.FormData()
+                    # ComfyUI uses 'image' field name for all file uploads
+                    form_data.add_field('image', f, filename=filename, content_type=content_type)
+                    form_data.add_field('type', 'input')
+                    form_data.add_field('overwrite', str(overwrite).lower())
+
+                    # ComfyUI uses /upload/image for all files (images and videos)
+                    async with session.post(f"http://{self.addr}/upload/image", data=form_data) as resp:
+                        if resp.status != 200:
+                            error_text = await resp.text()
+                            raise RuntimeError(f"ComfyUI video upload failed with status {resp.status}: {error_text}")
+
+                        response = await resp.json()
+                        logger.debug(f"Video uploaded successfully: {response}")
+                        return response.get('name', filename)
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error uploading video to ComfyUI at {self.addr}: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Failed to upload video to ComfyUI: {str(e)}") from e
+
     async def connect(self) -> None:
         """Establish websocket connection to ComfyUI server"""
         if not self.websocket or self.websocket.closed:
@@ -249,7 +307,7 @@ class SingleComfy:
 
         return output_images
 
-    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
+    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[Tuple[bytes, Dict[str, Any]], None]:
         """Generate images or videos from a workflow.
 
         Args:
@@ -259,7 +317,9 @@ class SingleComfy:
                           the workflow's LoadImage node to reference it
 
         Yields:
-            Generated image/video data as bytes (PNG for images, MP4 for videos)
+            Tuple of (data_bytes, workflow_dict) where:
+                - data_bytes: Generated image/video data as bytes (PNG for images, MP4 for videos)
+                - workflow_dict: The workflow dictionary used for generation (for ComfyUI drag-drop)
 
         Raises:
             RuntimeError: On ComfyUI errors
@@ -311,7 +371,7 @@ class SingleComfy:
                                 subfolder = video_info.get('subfolder', '')
                                 logger.info(f"Fetching video: {filename} from subfolder: {subfolder}")
                                 video_data = await self.get_video(filename, subfolder)
-                                yield video_data
+                                yield (video_data, prompt_data)
 
                     if not found_video:
                         logger.error(f"No videos found in outputs: {outputs}")
@@ -323,7 +383,7 @@ class SingleComfy:
                 # Regular image workflow
                 for node_id in images:
                     for image_data in images[node_id]:
-                        yield image_data
+                        yield (image_data, prompt_data)
         except Exception as e:
             await self.disconnect()  # Force reconnect on error
             raise e
@@ -362,10 +422,10 @@ class Comfy:
                 workflow, future = await self.queue.get()
                 try:
                     async with self.instance_locks[instance_id]:
-                        async for image in self.instances[instance_id].generate(workflow):
+                        async for result in self.instances[instance_id].generate(workflow):
                             if not future.cancelled():
-                                future.set_result(image)
-                            break  # Only yield first image for now
+                                future.set_result(result)  # result is (bytes, workflow_dict) tuple
+                            break  # Only yield first result for now
                 except Exception as e:
                     if not future.cancelled():
                         future.set_exception(e)
@@ -408,7 +468,7 @@ class Comfy:
         )
         return sum(1 for r in results if r is True)
 
-    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[bytes, None]:
+    async def generate(self, workflow: ComfyWorkflow, image_uploads: Optional[Dict[str, str]] = None) -> AsyncGenerator[Tuple[bytes, Dict[str, Any]], None]:
         """Generate images using available Comfy instances in parallel
 
         Args:
@@ -416,7 +476,9 @@ class Comfy:
             image_uploads: Optional dict mapping node input field names to local image paths to upload
 
         Yields:
-            Generated image data as byte arrays containing .png format
+            Tuple of (data_bytes, workflow_dict) where:
+                - data_bytes: Generated image data as bytes (PNG format)
+                - workflow_dict: The workflow dictionary used for generation (for ComfyUI drag-drop)
         """
         if not self.workers:
             await self.start()
@@ -431,6 +493,6 @@ class Comfy:
         future = asyncio.Future()
         await self.queue.put((workflow, future))
         result = await future
-        yield result
+        yield result  # result is (bytes, workflow_dict) tuple
 
 

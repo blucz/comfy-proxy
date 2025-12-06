@@ -39,7 +39,7 @@ async def test_qwen_image_edit_plus() -> None:
         input_image_path = os.path.join(test_dir, "input.jpg")
 
         # Generate and save the first image with image upload
-        async for image_data in comfy.generate(workflow, image_uploads={"image": input_image_path}):
+        async for image_data, workflow_dict in comfy.generate(workflow, image_uploads={"image": input_image_path}):
             with open("qwen_edit_output.png", "wb") as f:
                 f.write(image_data)
             break  # Only save the first image
@@ -74,7 +74,7 @@ async def test_qwen_image_edit_plus_lightning() -> None:
         input_image_path = os.path.join(test_dir, "input.jpg")
 
         # Generate and save the first image with image upload
-        async for image_data in comfy.generate(workflow, image_uploads={"image": input_image_path}):
+        async for image_data, workflow_dict in comfy.generate(workflow, image_uploads={"image": input_image_path}):
             with open("qwen_edit_plus_lightning_output.png", "wb") as f:
                 f.write(image_data)
             break  # Only save the first image

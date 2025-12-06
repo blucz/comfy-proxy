@@ -166,9 +166,10 @@ async def test_flux2_generate() -> None:
         workflow = Flux2Workflow(params)
 
         # Generate and save the first image
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             with open("flux2_t2i_output.png", "wb") as f:
                 f.write(image_data)
+            assert workflow_dict is not None  # Verify workflow dict is returned
             break  # Only save the first image
     finally:
         await comfy.stop()
@@ -208,7 +209,7 @@ async def test_flux2_edit_generate() -> None:
         workflow._update_image_reference("image", uploaded_filename, workflow.reference_image_node_ids[0])
 
         # Generate without image_uploads since we manually uploaded
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             with open("flux2_edit_output.png", "wb") as f:
                 f.write(image_data)
             break
@@ -252,7 +253,7 @@ async def test_flux2_edit_multiple_refs_generate() -> None:
             workflow._update_image_reference("image", uploaded_filename, node_id)
 
         # Generate without image_uploads since we manually uploaded
-        async for image_data in comfy.generate(workflow):
+        async for image_data, workflow_dict in comfy.generate(workflow):
             with open("flux2_edit_multi_ref_output.png", "wb") as f:
                 f.write(image_data)
             break

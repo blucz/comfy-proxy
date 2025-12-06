@@ -44,7 +44,7 @@ async def test_wan_i2v_single_image() -> None:
         start_image_path = os.path.join(test_dir, "start_frame.jpg")
 
         # Generate and save the video with image upload
-        async for video_data in comfy.generate(workflow, image_uploads={"image": start_image_path}):
+        async for video_data, workflow_dict in comfy.generate(workflow, image_uploads={"image": start_image_path}):
             with open("wan_i2v_output.mp4", "wb") as f:
                 f.write(video_data)
             break  # Only save the first video
@@ -96,7 +96,7 @@ async def test_wan_i2v_first_last_frames() -> None:
         workflow._update_image_reference("image", end_filename, workflow.end_image_node_id)
 
         # Generate video (no image_uploads param needed since we already uploaded)
-        async for video_data in comfy.generate(workflow):
+        async for video_data, workflow_dict in comfy.generate(workflow):
             with open("wan_i2v_first_last_output.mp4", "wb") as f:
                 f.write(video_data)
             break  # Only save the first video
@@ -135,7 +135,7 @@ async def test_wan_i2v_lightning_single_image() -> None:
         start_image_path = os.path.join(test_dir, "start_frame.jpg")
 
         # Generate and save the video with image upload
-        async for video_data in comfy.generate(workflow, image_uploads={"image": start_image_path}):
+        async for video_data, workflow_dict in comfy.generate(workflow, image_uploads={"image": start_image_path}):
             with open("wan_i2v_lightning_output.mp4", "wb") as f:
                 f.write(video_data)
             break  # Only save the first video
@@ -185,7 +185,7 @@ async def test_wan_i2v_lightning_first_last() -> None:
         workflow._update_image_reference("image", start_filename, workflow.end_image_node_id)
 
         # Generate video
-        async for video_data in comfy.generate(workflow):
+        async for video_data, workflow_dict in comfy.generate(workflow):
             with open("wan_i2v_lightning_first_last_output.mp4", "wb") as f:
                 f.write(video_data)
             break  # Only save the first video

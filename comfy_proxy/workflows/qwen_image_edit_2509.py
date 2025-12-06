@@ -63,7 +63,7 @@ class QwenImageEditPlusWorkflowParams:
     megapixels: float = 1.0  # Target megapixels for scaling
     cfg: float = 4.0
     cfg_norm_strength: float = 1.0  # CFGNorm strength
-    steps: int = 30
+    steps: int = 20
     scheduler: str = "simple"
     sampler: str = "euler"
     denoise: float = 1.0
