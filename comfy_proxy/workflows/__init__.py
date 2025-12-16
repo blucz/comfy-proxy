@@ -16,6 +16,7 @@ from .seedvr2_video_upscale import (
     SeedVR2VideoUpscaleModel, SeedVR2VideoUpscaleWorkflowParams, SeedVR2VideoUpscaleWorkflow
 )
 from .sdxl import SDXLModel, SDXLWorkflowParams, SDXLWorkflow
+from .sam3 import SAM3Model, SAM3WorkflowParams, SAM3Workflow
 
 __all__ = [
     'FluxModel', 'FluxWorkflowParams', 'FluxWorkflow',
@@ -27,5 +28,6 @@ __all__ = [
     'WanI2VLightningModel', 'WanI2VLightningWorkflowParams', 'WanI2VLightningWorkflow',
     'SeedVR2UpscaleModel', 'SeedVR2UpscaleWorkflowParams', 'SeedVR2UpscaleWorkflow',
     'SeedVR2VideoUpscaleModel', 'SeedVR2VideoUpscaleWorkflowParams', 'SeedVR2VideoUpscaleWorkflow',
-    'SDXLModel', 'SDXLWorkflowParams', 'SDXLWorkflow'
+    'SDXLModel', 'SDXLWorkflowParams', 'SDXLWorkflow',
+    'SAM3Model', 'SAM3WorkflowParams', 'SAM3Workflow'
 ]
