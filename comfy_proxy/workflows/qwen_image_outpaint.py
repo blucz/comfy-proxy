@@ -77,6 +77,10 @@ class QwenImageOutpaintWorkflowParams:
     denoise: float = 1.0
     shift: float = 3.1
     seed: Optional[int] = None
+    # Crop+stitch settings
+    context_expand_factor: float = 1.2  # How much context around mask (1.0-2.0)
+    mask_blend_pixels: int = 32  # Blend radius for stitching (0-100)
+    mask_fill_holes: bool = True  # Fill enclosed mask areas
 
     def __post_init__(self):
         if self.seed is None:
@@ -108,6 +112,10 @@ class QwenImageOutpaintLightningWorkflowParams:
     denoise: float = 1.0
     shift: float = 3.1
     seed: Optional[int] = None
+    # Crop+stitch settings
+    context_expand_factor: float = 1.2  # How much context around mask (1.0-2.0)
+    mask_blend_pixels: int = 32  # Blend radius for stitching (0-100)
+    mask_fill_holes: bool = True  # Fill enclosed mask areas
 
     def __post_init__(self):
         if self.seed is None:
@@ -175,6 +183,35 @@ class QwenImageOutpaintWorkflow(ComfyWorkflow):
             "feathering": self.params.feathering
         }, title="Pad Image for Outpaint")
 
+        # Crop the PADDED image to the mask region (preserves untouched pixels)
+        inpaint_crop = self.add_node("InpaintCropImproved", {
+            "image": [pad_image, 0],  # Padded image
+            "mask": [pad_image, 1],   # Mask from padding
+            "downscale_algorithm": "bilinear",
+            "upscale_algorithm": "bicubic",
+            "preresize": False,
+            "preresize_mode": "ensure minimum resolution",
+            "preresize_min_width": 1024,
+            "preresize_min_height": 1024,
+            "preresize_max_width": 8192,
+            "preresize_max_height": 8192,
+            "mask_fill_holes": self.params.mask_fill_holes,
+            "mask_expand_pixels": 0,
+            "mask_invert": False,
+            "mask_blend_pixels": self.params.mask_blend_pixels,
+            "mask_hipass_filter": 0.1,
+            "extend_for_outpainting": False,  # Already handled by ImagePadForOutpaint
+            "extend_up_factor": 1.0,
+            "extend_down_factor": 1.0,
+            "extend_left_factor": 1.0,
+            "extend_right_factor": 1.0,
+            "context_from_mask_extend_factor": self.params.context_expand_factor,
+            "output_resize_to_target_size": False,
+            "output_target_width": 512,
+            "output_target_height": 512,
+            "output_padding": "32"
+        }, title="Inpaint Crop")
+
         # Encode prompts
         positive_prompt = self.add_node("CLIPTextEncode", {
             "text": self.params.prompt,
@@ -186,23 +223,22 @@ class QwenImageOutpaintWorkflow(ComfyWorkflow):
             "clip": [clip, 0]
         }, title="CLIP Text Encode (Negative Prompt)")
 
-        # Apply ControlNet inpainting (AliMama node)
-        # Uses the padded image and mask from ImagePadForOutpaint
+        # Apply ControlNet inpainting (AliMama node) - uses CROPPED image/mask
         controlnet_apply = self.add_node("ControlNetInpaintingAliMamaApply", {
             "positive": [positive_prompt, 0],
             "negative": [negative_prompt, 0],
             "control_net": [controlnet, 0],
             "vae": [vae, 0],
-            "image": [pad_image, 0],  # Padded image
-            "mask": [pad_image, 1],   # Mask from padding
+            "image": [inpaint_crop, 1],  # cropped_image
+            "mask": [inpaint_crop, 2],   # cropped_mask
             "strength": self.params.strength,
             "start_percent": 0,
             "end_percent": 1
         }, title="ControlNetInpaintingAliMamaApply")
 
-        # Encode padded image to latent
+        # Encode CROPPED image to latent
         vae_encode = self.add_node("VAEEncode", {
-            "pixels": [pad_image, 0],
+            "pixels": [inpaint_crop, 1],  # cropped_image
             "vae": [vae, 0]
         }, title="VAE Encode")
 
@@ -226,9 +262,15 @@ class QwenImageOutpaintWorkflow(ComfyWorkflow):
             "vae": [vae, 0]
         }, title="VAE Decode")
 
+        # Stitch back onto padded image (preserves untouched pixels)
+        stitch = self.add_node("InpaintStitchImproved", {
+            "stitcher": [inpaint_crop, 0],  # stitcher object
+            "inpainted_image": [decode, 0]
+        }, title="Inpaint Stitch")
+
         # Save via websocket
         self.add_node("SaveImageWebsocket", {
-            "images": [decode, 0]
+            "images": [stitch, 0]
         }, node_id="save_image_websocket_node")
 
 
@@ -293,6 +335,35 @@ class QwenImageOutpaintLightningWorkflow(ComfyWorkflow):
             "feathering": self.params.feathering
         }, title="Pad Image for Outpaint")
 
+        # Crop the PADDED image to the mask region (preserves untouched pixels)
+        inpaint_crop = self.add_node("InpaintCropImproved", {
+            "image": [pad_image, 0],  # Padded image
+            "mask": [pad_image, 1],   # Mask from padding
+            "downscale_algorithm": "bilinear",
+            "upscale_algorithm": "bicubic",
+            "preresize": False,
+            "preresize_mode": "ensure minimum resolution",
+            "preresize_min_width": 1024,
+            "preresize_min_height": 1024,
+            "preresize_max_width": 8192,
+            "preresize_max_height": 8192,
+            "mask_fill_holes": self.params.mask_fill_holes,
+            "mask_expand_pixels": 0,
+            "mask_invert": False,
+            "mask_blend_pixels": self.params.mask_blend_pixels,
+            "mask_hipass_filter": 0.1,
+            "extend_for_outpainting": False,  # Already handled by ImagePadForOutpaint
+            "extend_up_factor": 1.0,
+            "extend_down_factor": 1.0,
+            "extend_left_factor": 1.0,
+            "extend_right_factor": 1.0,
+            "context_from_mask_extend_factor": self.params.context_expand_factor,
+            "output_resize_to_target_size": False,
+            "output_target_width": 512,
+            "output_target_height": 512,
+            "output_padding": "32"
+        }, title="Inpaint Crop")
+
         # Encode prompts
         positive_prompt = self.add_node("CLIPTextEncode", {
             "text": self.params.prompt,
@@ -304,23 +375,22 @@ class QwenImageOutpaintLightningWorkflow(ComfyWorkflow):
             "clip": [clip, 0]
         }, title="CLIP Text Encode (Negative Prompt)")
 
-        # Apply ControlNet inpainting (AliMama node)
-        # Uses the padded image and mask from ImagePadForOutpaint
+        # Apply ControlNet inpainting (AliMama node) - uses CROPPED image/mask
         controlnet_apply = self.add_node("ControlNetInpaintingAliMamaApply", {
             "positive": [positive_prompt, 0],
             "negative": [negative_prompt, 0],
             "control_net": [controlnet, 0],
             "vae": [vae, 0],
-            "image": [pad_image, 0],  # Padded image
-            "mask": [pad_image, 1],   # Mask from padding
+            "image": [inpaint_crop, 1],  # cropped_image
+            "mask": [inpaint_crop, 2],   # cropped_mask
             "strength": self.params.strength,
             "start_percent": 0,
             "end_percent": 1
         }, title="ControlNetInpaintingAliMamaApply")
 
-        # Encode padded image to latent
+        # Encode CROPPED image to latent
         vae_encode = self.add_node("VAEEncode", {
-            "pixels": [pad_image, 0],
+            "pixels": [inpaint_crop, 1],  # cropped_image
             "vae": [vae, 0]
         }, title="VAE Encode")
 
@@ -344,7 +414,13 @@ class QwenImageOutpaintLightningWorkflow(ComfyWorkflow):
             "vae": [vae, 0]
         }, title="VAE Decode")
 
+        # Stitch back onto padded image (preserves untouched pixels)
+        stitch = self.add_node("InpaintStitchImproved", {
+            "stitcher": [inpaint_crop, 0],  # stitcher object
+            "inpainted_image": [decode, 0]
+        }, title="Inpaint Stitch")
+
         # Save via websocket
         self.add_node("SaveImageWebsocket", {
-            "images": [decode, 0]
+            "images": [stitch, 0]
         }, node_id="save_image_websocket_node")
