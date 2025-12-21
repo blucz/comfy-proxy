@@ -155,7 +155,8 @@ class QwenImageInpaintWorkflow(ComfyWorkflow):
             "image": self.params.image
         }, title="Load Image")
 
-        # Load mask
+        # Load mask image
+        # Expected format: RGBA where alpha=0 means inpaint, alpha=255 means preserve
         load_mask = self.add_node("LoadImage", {
             "image": self.params.mask
         }, title="Load Mask")
@@ -163,7 +164,7 @@ class QwenImageInpaintWorkflow(ComfyWorkflow):
         # Crop to masked region with context (preserves untouched pixels)
         inpaint_crop = self.add_node("InpaintCropImproved", {
             "image": [load_image, 0],
-            "mask": [load_mask, 1],  # Mask output from LoadImage
+            "mask": [load_mask, 1],  # Use alpha channel from LoadImage
             "downscale_algorithm": "bilinear",
             "upscale_algorithm": "bicubic",
             "preresize": False,
@@ -302,7 +303,8 @@ class QwenImageInpaintLightningWorkflow(ComfyWorkflow):
             "image": self.params.image
         }, title="Load Image")
 
-        # Load mask
+        # Load mask image
+        # Expected format: RGBA where alpha=0 means inpaint, alpha=255 means preserve
         load_mask = self.add_node("LoadImage", {
             "image": self.params.mask
         }, title="Load Mask")
@@ -310,7 +312,7 @@ class QwenImageInpaintLightningWorkflow(ComfyWorkflow):
         # Crop to masked region with context (preserves untouched pixels)
         inpaint_crop = self.add_node("InpaintCropImproved", {
             "image": [load_image, 0],
-            "mask": [load_mask, 1],  # Mask output from LoadImage
+            "mask": [load_mask, 1],  # Use alpha channel from LoadImage
             "downscale_algorithm": "bilinear",
             "upscale_algorithm": "bicubic",
             "preresize": False,

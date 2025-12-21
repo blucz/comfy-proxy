@@ -256,7 +256,8 @@ class SingleComfy:
     async def interrupt(self) -> bool:
         """Interrupt the currently executing prompt on this ComfyUI instance.
 
-        This also disconnects the websocket to unblock any pending get_images() calls.
+        Note: This does NOT disconnect the websocket. Use interrupt_and_clear() for
+        a complete stop that also disconnects.
 
         Returns:
             True if interrupt was successful, False otherwise
@@ -266,8 +267,6 @@ class SingleComfy:
                 async with session.post(f"http://{self.addr}/interrupt") as resp:
                     if resp.status == 200:
                         logger.info(f"Interrupted execution on {self.addr}")
-                        # Disconnect websocket to unblock any waiting calls
-                        await self.disconnect()
                         return True
                     else:
                         error_text = await resp.text()
@@ -276,6 +275,47 @@ class SingleComfy:
         except aiohttp.ClientError as e:
             logger.error(f"Network error interrupting ComfyUI at {self.addr}: {str(e)}")
             return False
+
+    async def clear_queue(self) -> bool:
+        """Clear all pending prompts from this ComfyUI instance's queue.
+
+        Returns:
+            True if queue was cleared successfully, False otherwise
+        """
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"http://{self.addr}/queue",
+                    json={"clear": True}
+                ) as resp:
+                    if resp.status == 200:
+                        logger.info(f"Cleared queue on {self.addr}")
+                        return True
+                    else:
+                        error_text = await resp.text()
+                        logger.warning(f"Clear queue failed on {self.addr} with status {resp.status}: {error_text}")
+                        return False
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error clearing queue on ComfyUI at {self.addr}: {str(e)}")
+            return False
+
+    async def interrupt_and_clear(self) -> bool:
+        """Interrupt current execution AND clear pending queue.
+
+        This provides a complete stop - both the running generation and any queued work.
+        The websocket is disconnected AFTER clearing the queue to ensure any workers
+        that reconnected during the clear operation are also unblocked.
+
+        Returns:
+            True if both operations succeeded, False if either failed
+        """
+        interrupt_ok = await self.interrupt()
+        clear_ok = await self.clear_queue()
+        # Disconnect AFTER clearing to unblock any get_images() calls
+        # This handles the race condition where a worker might submit a new prompt
+        # between interrupt and clear_queue, then wait forever for that cleared prompt
+        await self.disconnect()
+        return interrupt_ok and clear_ok
 
     async def get_images(self, prompt_id: str) -> Dict[str, List[bytes]]:
         """Receive generated images or videos over websocket connection.
@@ -465,6 +505,33 @@ class Comfy:
         """
         results = await asyncio.gather(
             *[instance.interrupt() for instance in self.instances],
+            return_exceptions=True
+        )
+        return sum(1 for r in results if r is True)
+
+    async def clear_all_queues(self) -> int:
+        """Clear all pending prompts from all ComfyUI instances' queues.
+
+        Returns:
+            Number of instances where queue was cleared successfully
+        """
+        results = await asyncio.gather(
+            *[instance.clear_queue() for instance in self.instances],
+            return_exceptions=True
+        )
+        return sum(1 for r in results if r is True)
+
+    async def interrupt_and_clear_all(self) -> int:
+        """Interrupt all running prompts AND clear all pending queues.
+
+        This provides a complete stop across all instances - both running
+        generations and any queued work are cancelled.
+
+        Returns:
+            Number of instances where both operations succeeded
+        """
+        results = await asyncio.gather(
+            *[instance.interrupt_and_clear() for instance in self.instances],
             return_exceptions=True
         )
         return sum(1 for r in results if r is True)

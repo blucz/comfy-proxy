@@ -152,6 +152,7 @@ class QwenImageEditPlusWorkflow(ComfyWorkflow):
         scale_image = self.add_node("ImageScaleToTotalPixels", {
             "upscale_method": self.params.upscale_method,
             "megapixels": self.params.megapixels,
+            "resolution_steps": 64,
             "image": [load_image, 0]
         }, title="Scale Image 1")
 
@@ -164,6 +165,7 @@ class QwenImageEditPlusWorkflow(ComfyWorkflow):
             scale_image2 = self.add_node("ImageScaleToTotalPixels", {
                 "upscale_method": self.params.upscale_method,
                 "megapixels": self.params.megapixels,
+                "resolution_steps": 64,
                 "image": [load_image2, 0]
             }, title="Scale Image 2")
 
@@ -176,6 +178,7 @@ class QwenImageEditPlusWorkflow(ComfyWorkflow):
             scale_image3 = self.add_node("ImageScaleToTotalPixels", {
                 "upscale_method": self.params.upscale_method,
                 "megapixels": self.params.megapixels,
+                "resolution_steps": 64,
                 "image": [load_image3, 0]
             }, title="Scale Image 3")
 
@@ -300,6 +303,7 @@ class QwenImageEditPlusLightningWorkflow(ComfyWorkflow):
         scale_image = self.add_node("ImageScaleToTotalPixels", {
             "upscale_method": self.params.upscale_method,
             "megapixels": self.params.megapixels,
+            "resolution_steps": 64,
             "image": [load_image, 0]
         }, title="Scale Image 1")
 
@@ -312,6 +316,7 @@ class QwenImageEditPlusLightningWorkflow(ComfyWorkflow):
             scale_image2 = self.add_node("ImageScaleToTotalPixels", {
                 "upscale_method": self.params.upscale_method,
                 "megapixels": self.params.megapixels,
+                "resolution_steps": 64,
                 "image": [load_image2, 0]
             }, title="Scale Image 2")
 
@@ -324,6 +329,7 @@ class QwenImageEditPlusLightningWorkflow(ComfyWorkflow):
             scale_image3 = self.add_node("ImageScaleToTotalPixels", {
                 "upscale_method": self.params.upscale_method,
                 "megapixels": self.params.megapixels,
+                "resolution_steps": 64,
                 "image": [load_image3, 0]
             }, title="Scale Image 3")
 

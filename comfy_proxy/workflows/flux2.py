@@ -286,6 +286,7 @@ class Flux2EditWorkflow(ComfyWorkflow):
             scale_image = self.add_node("ImageScaleToTotalPixels", {
                 "upscale_method": self.params.upscale_method,
                 "megapixels": self.params.megapixels,
+                "resolution_steps": 64,
                 "image": [load_image, 0]
             }, title=f"Scale Reference Image {i+1}")
 
