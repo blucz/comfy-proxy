@@ -4,7 +4,9 @@ import pytest
 from comfy_proxy.workflows.sam3 import (
     SAM3Model,
     SAM3WorkflowParams,
-    SAM3Workflow
+    SAM3Workflow,
+    SAM3Detection,
+    SAM3Result
 )
 
 
@@ -36,6 +38,8 @@ async def test_sam3_workflow_structure() -> None:
     assert "LoadSAM3Model" in node_types
     assert "SAM3Grounding" in node_types
     assert "SaveImageWebsocket" in node_types
+    assert "MaskToImage" in node_types
+    assert "SaveImage" in node_types
 
 
 @pytest.mark.asyncio
@@ -52,6 +56,7 @@ async def test_sam3_default_params() -> None:
     assert params.multimask_output is False
     assert params.model is not None
     assert params.model.model_path == "models/sam3/sam3.pt"
+    assert params.output_prefix == "sam3_"
 
 
 @pytest.mark.asyncio
@@ -79,10 +84,9 @@ async def test_sam3_custom_params() -> None:
             break
 
     assert grounding_node is not None
-    assert grounding_node["inputs"]["prompt"] == "car"
+    assert grounding_node["inputs"]["text_prompt"] == "car"
     assert grounding_node["inputs"]["confidence_threshold"] == 0.5
     assert grounding_node["inputs"]["max_detections"] == 10
-    assert grounding_node["inputs"]["multimask_output"] is True
 
 
 @pytest.mark.asyncio
@@ -146,3 +150,71 @@ async def test_sam3_grounding_node_outputs() -> None:
     grounding_node_id = images_input[0]
     grounding_node = prompt_dict[grounding_node_id]
     assert grounding_node["class_type"] == "SAM3Grounding"
+
+
+@pytest.mark.asyncio
+async def test_sam3_mask_save_nodes() -> None:
+    """Test that masks are saved via SaveImage node."""
+    params = SAM3WorkflowParams(
+        input_image="test.png",
+        prompt="cat",
+        output_prefix="test_prefix_"
+    )
+
+    workflow = SAM3Workflow(params)
+    prompt_dict = workflow.to_dict()
+
+    # Find the SaveImage node for masks
+    save_image_nodes = [
+        node for node in prompt_dict.values()
+        if node["class_type"] == "SaveImage"
+    ]
+    assert len(save_image_nodes) == 1
+    save_node = save_image_nodes[0]
+
+    # Check filename prefix is set correctly
+    assert save_node["inputs"]["filename_prefix"] == "test_prefix_mask"
+
+    # Find MaskToImage node
+    mask_to_image_nodes = [
+        node for node in prompt_dict.values()
+        if node["class_type"] == "MaskToImage"
+    ]
+    assert len(mask_to_image_nodes) == 1
+
+    # Verify MaskToImage connects to SAM3Grounding output 0 (masks)
+    mask_node = mask_to_image_nodes[0]
+    mask_input = mask_node["inputs"]["mask"]
+    assert isinstance(mask_input, list)
+    assert mask_input[1] == 0  # Output index 0 = masks
+
+
+@pytest.mark.asyncio
+async def test_sam3_result_dataclasses() -> None:
+    """Test SAM3Detection and SAM3Result dataclasses."""
+    # Test SAM3Detection
+    detection = SAM3Detection(
+        bbox={"x": 10, "y": 20, "width": 100, "height": 200},
+        score=0.95,
+        mask_filename="sam3_mask_00001.png"
+    )
+    assert detection.bbox["x"] == 10
+    assert detection.score == 0.95
+    assert detection.mask_filename == "sam3_mask_00001.png"
+
+    # Test SAM3Result
+    result = SAM3Result(
+        detections=[detection],
+        visualization=b"test_image_data",
+        original_width=1024,
+        original_height=768
+    )
+    assert len(result.detections) == 1
+    assert result.visualization == b"test_image_data"
+    assert result.original_width == 1024
+    assert result.original_height == 768
+
+    # Test empty result
+    empty_result = SAM3Result()
+    assert len(empty_result.detections) == 0
+    assert empty_result.visualization is None

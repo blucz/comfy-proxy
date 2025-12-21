@@ -56,8 +56,9 @@ class SingleComfy:
         logger.debug(f"Prompt data: {data}")
         
         try:
+            headers = {"Content-Type": "application/json"}
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"http://{self.addr}/prompt", data=data) as resp:
+                async with session.post(f"http://{self.addr}/prompt", data=data, headers=headers) as resp:
                     if resp.status != 200:
                         error_text = await resp.text()
                         raise RuntimeError(f"ComfyUI returned status {resp.status}: {error_text}")
