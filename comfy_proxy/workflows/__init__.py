@@ -3,6 +3,13 @@ from .flux2 import (
     Flux2Model, Flux2WorkflowParams, Flux2Workflow,
     Flux2EditModel, Flux2EditWorkflowParams, Flux2EditWorkflow
 )
+from .flux_fill import (
+    FluxFillModel, FluxFillInpaintWorkflowParams, FluxFillInpaintWorkflow,
+    FluxFillOutpaintWorkflowParams, FluxFillOutpaintWorkflow
+)
+from .flux_kontext import (
+    FluxKontextModel, FluxKontextWorkflowParams, FluxKontextWorkflow
+)
 from .qwen_image import (
     QwenImageModel, QwenImageWorkflowParams, QwenImageWorkflow,
     QwenImageLightningModel, QwenImageLightningWorkflowParams, QwenImageLightningWorkflow
@@ -33,6 +40,9 @@ __all__ = [
     'FluxModel', 'FluxWorkflowParams', 'FluxWorkflow',
     'Flux2Model', 'Flux2WorkflowParams', 'Flux2Workflow',
     'Flux2EditModel', 'Flux2EditWorkflowParams', 'Flux2EditWorkflow',
+    'FluxFillModel', 'FluxFillInpaintWorkflowParams', 'FluxFillInpaintWorkflow',
+    'FluxFillOutpaintWorkflowParams', 'FluxFillOutpaintWorkflow',
+    'FluxKontextModel', 'FluxKontextWorkflowParams', 'FluxKontextWorkflow',
     'QwenImageModel', 'QwenImageWorkflowParams', 'QwenImageWorkflow',
     'QwenImageLightningModel', 'QwenImageLightningWorkflowParams', 'QwenImageLightningWorkflow',
     'QwenImageInpaintModel', 'QwenImageInpaintWorkflowParams', 'QwenImageInpaintWorkflow',

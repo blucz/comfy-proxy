@@ -33,6 +33,7 @@ class QwenImageOutpaintLightningModel:
     clip_name: str = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
     vae_name: str = "qwen_image_vae.safetensors"
     controlnet_name: str = "Qwen-Image-Controlnet-Inpainting.safetensors"
+    lightning_lora: str = "qwen/Qwen-Image-Lightning-8steps-V2.0.safetensors"
     loras: List[Lora] = None
     weight_dtype: str = "default"
     clip_type: str = "qwen_image"
@@ -41,10 +42,10 @@ class QwenImageOutpaintLightningModel:
     def __post_init__(self):
         if self.loras is None:
             self.loras = []
-        # Always include the lightning LoRA
-        lightning_lora = Lora(name="qwen/Qwen-Image-Lightning-8steps-V2.0.safetensors", weight=1.0)
-        if lightning_lora not in self.loras:
-            self.loras.insert(0, lightning_lora)
+        # Always include the lightning LoRA (from parameter, not hardcoded)
+        lightning_lora_obj = Lora(name=self.lightning_lora, weight=1.0)
+        if lightning_lora_obj not in self.loras:
+            self.loras.insert(0, lightning_lora_obj)
 
     @classmethod
     def default(cls) -> 'QwenImageOutpaintLightningModel':
@@ -78,8 +79,8 @@ class QwenImageOutpaintWorkflowParams:
     shift: float = 3.1
     seed: Optional[int] = None
     # Crop+stitch settings
-    context_expand_factor: float = 1.2  # How much context around mask (1.0-2.0)
-    mask_blend_pixels: int = 32  # Blend radius for stitching (0-100)
+    context_expand_factor: float = 1.2  # How much context around mask (1.0-4.0)
+    mask_blend_pixels: int = 32  # Blend radius for stitching (0-200)
     mask_fill_holes: bool = True  # Fill enclosed mask areas
 
     def __post_init__(self):
@@ -113,8 +114,8 @@ class QwenImageOutpaintLightningWorkflowParams:
     shift: float = 3.1
     seed: Optional[int] = None
     # Crop+stitch settings
-    context_expand_factor: float = 1.2  # How much context around mask (1.0-2.0)
-    mask_blend_pixels: int = 32  # Blend radius for stitching (0-100)
+    context_expand_factor: float = 1.2  # How much context around mask (1.0-4.0)
+    mask_blend_pixels: int = 32  # Blend radius for stitching (0-200)
     mask_fill_holes: bool = True  # Fill enclosed mask areas
 
     def __post_init__(self):

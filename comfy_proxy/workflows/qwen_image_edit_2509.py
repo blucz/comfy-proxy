@@ -40,13 +40,59 @@ class QwenImageEditPlusLightningModel:
         if self.loras is None:
             self.loras = []
         # Always include the lightning LoRA
-        lightning_lora = Lora(name="Qwen-Image-Edit-Lightning-8steps-V1.0.safetensors", weight=1.0)
+        lightning_lora = Lora(name="qwen-edit-plus/Qwen-Image-Edit-Lightning-8steps-V1.0.safetensors", weight=1.0)
         if lightning_lora not in self.loras:
             self.loras.insert(0, lightning_lora)
 
     @classmethod
     def default(cls) -> 'QwenImageEditPlusLightningModel':
         """Returns the default Qwen Image Edit Plus Lightning model configuration"""
+        return cls()
+
+
+@dataclass
+class QwenImageEdit2511Model:
+    """Configuration for a Qwen Image Edit 2511 model and its components"""
+    unet_name: str = "qwen_image_edit_2511_bf16.safetensors"
+    clip_name: str = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    vae_name: str = "qwen_image_vae.safetensors"
+    loras: List[Lora] = None
+    weight_dtype: str = "default"  # bf16 models use 'default' dtype in ComfyUI
+    clip_type: str = "qwen_image"
+    clip_device: str = "default"
+
+    def __post_init__(self):
+        if self.loras is None:
+            self.loras = []
+
+    @classmethod
+    def default(cls) -> 'QwenImageEdit2511Model':
+        """Returns the default Qwen Image Edit 2511 model configuration"""
+        return cls()
+
+
+@dataclass
+class QwenImageEdit2511LightningModel:
+    """Configuration for Qwen Image Edit 2511 Lightning (4 steps) model"""
+    unet_name: str = "qwen_image_edit_2511_bf16.safetensors"
+    clip_name: str = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
+    vae_name: str = "qwen_image_vae.safetensors"
+    loras: List[Lora] = None
+    weight_dtype: str = "default"  # bf16 models use 'default' dtype in ComfyUI
+    clip_type: str = "qwen_image"
+    clip_device: str = "default"
+
+    def __post_init__(self):
+        if self.loras is None:
+            self.loras = []
+        # Always include the 2511 lightning LoRA (4 steps)
+        lightning_lora = Lora(name="qwen-edit-plus/Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors", weight=1.0)
+        if lightning_lora not in self.loras:
+            self.loras.insert(0, lightning_lora)
+
+    @classmethod
+    def default(cls) -> 'QwenImageEdit2511LightningModel':
+        """Returns the default Qwen Image Edit 2511 Lightning model configuration"""
         return cls()
 
 
